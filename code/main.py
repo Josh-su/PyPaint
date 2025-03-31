@@ -12,7 +12,7 @@ from PySide6.QtGui import (
     QPainter, QPixmap, QImage, QColor, QPen, QAction, QIcon, Qt,
     QKeySequence, QPalette, QCursor, QIntValidator
 )
-from PySide6.QtCore import QPoint, QPointF, QSize, QSizeF, Signal, Slot, QRect, QRectF, Qt
+from PySide6.QtCore import QPoint, QPointF, QSize, QSizeF, Signal, Slot, QRect, QRectF, Qt, QTimer
 
 # ============================================
 #               CONSTANTS
@@ -106,6 +106,28 @@ class Canvas(QWidget):
         # Panning variables
         self.panning = False
         self.pan_start_pos = QPoint()
+        
+        self.checkerboard_pixmap = None
+        self._create_checkerboard_pixmap()
+
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.update)
+        self.timer.start(100)
+
+    def _create_checkerboard_pixmap(self):
+        """
+        Create the checkerboard pixmap for the background.
+        """
+        checkerboard_size = QSize(CHECKER_SIZE * 20, CHECKER_SIZE * 20)  # Adjust size as needed
+        self.checkerboard_pixmap = QPixmap(checkerboard_size)
+        painter = QPainter(self.checkerboard_pixmap)
+        painter.setPen(Qt.NoPen)
+        for y in range(0, checkerboard_size.height(), CHECKER_SIZE):
+            for x in range(0, checkerboard_size.width(), CHECKER_SIZE):
+                color = LIGHT_GRAY if (x // CHECKER_SIZE + y // CHECKER_SIZE) % 2 == 0 else DARK_GRAY
+                painter.setBrush(color)
+                painter.drawRect(x, y, CHECKER_SIZE, CHECKER_SIZE)
+        painter.end()
 
     def _update_cursor(self):
         """
@@ -374,6 +396,9 @@ class Canvas(QWidget):
             return
         print(f"Resizing canvas from {self._image_size} to {new_size}")
         self._save_state()
+
+        self._create_checkerboard_pixmap()
+
         new_image = QImage(new_size, QImage.Format_ARGB32)
         new_image.fill(Qt.transparent)
         painter = QPainter(new_image)
@@ -432,6 +457,7 @@ class Canvas(QWidget):
                 return  # Exit after fill operation
             self.drawing = True
             self.last_point = image_pos_f
+            self.draw_point(image_pos_f)
             self._current_stroke_saved = True
             self._save_state()
 
@@ -515,11 +541,18 @@ class Canvas(QWidget):
         painter.save()
         painter.setPen(Qt.NoPen)
         image_rect = QRect(QPoint(0, 0), self._image_size * self.scale_factor)
-        for y in range(image_rect.top(), image_rect.bottom() + CHECKER_SIZE, CHECKER_SIZE):
-            for x in range(image_rect.left(), image_rect.right() + CHECKER_SIZE, CHECKER_SIZE):
-                color = LIGHT_GRAY if (x // CHECKER_SIZE + y // CHECKER_SIZE) % 2 == 0 else DARK_GRAY
-                painter.setBrush(color)
-                painter.drawRect(x, y, CHECKER_SIZE, CHECKER_SIZE)
+        
+        # Calculate the visible area of the checkerboard
+        visible_checkerboard_rect = widget_rect.intersected(image_rect)
+        
+        # Calculate the offset for the checkerboard pattern
+        offset_x = visible_checkerboard_rect.x() % self.checkerboard_pixmap.width()
+        offset_y = visible_checkerboard_rect.y() % self.checkerboard_pixmap.height()
+        
+        # Draw the checkerboard pixmap with the calculated offset
+        for y in range(visible_checkerboard_rect.top() - offset_y, visible_checkerboard_rect.bottom(), self.checkerboard_pixmap.height()):
+            for x in range(visible_checkerboard_rect.left() - offset_x, visible_checkerboard_rect.right(), self.checkerboard_pixmap.width()):
+                painter.drawPixmap(x, y, self.checkerboard_pixmap)
         painter.restore()
 
         # Draw the current image
@@ -614,7 +647,6 @@ class Canvas(QWidget):
         Perform a flood fill starting from a specified image coordinate.
         """
         self.setCursor(Qt.BusyCursor)
-        QApplication.processEvents()  # Update UI immediately
         try:
             if not self.image.rect().contains(start_image_point):
                 return
@@ -639,11 +671,9 @@ class Canvas(QWidget):
                         if (nx, ny) not in processed:
                             queue.append((nx, ny))
                             processed.add((nx, ny))
-                QApplication.processEvents()  # Keep UI responsive
             self.update()
         finally:
             self._update_cursor()
-
 
 # ============================================
 #              MAIN APPLICATION WINDOW
@@ -654,6 +684,7 @@ class MainWindow(QMainWindow):
     """
     def __init__(self):
         super().__init__()
+
         # Create and configure the scroll area and canvas widget
         self.scroll_area = QScrollArea()
         self.canvas = Canvas(self.scroll_area)
