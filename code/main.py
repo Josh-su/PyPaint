@@ -766,6 +766,7 @@ class MainWindow(QMainWindow):
         file_menu = menu.addMenu("&File")
         edit_menu = menu.addMenu("&Edit")
         view_menu = menu.addMenu("&View")
+        help_menu = menu.addMenu("&Help")
 
         # File menu actions: New, Open, Save, Quit
         new_action = QAction("&New", self, triggered=self.confirm_new_drawing)
@@ -786,12 +787,28 @@ class MainWindow(QMainWindow):
         reset_zoom_action = QAction("&Actual Size", self, shortcut=QKeySequence(Qt.CTRL | Qt.Key_0), triggered=self.canvas.reset_zoom)
         view_menu.addActions([zoom_in_action, zoom_out_action, reset_zoom_action])
 
+        # Help menu actions: About
+        about_action = QAction("&About", self, triggered=self.show_about_dialog) # <-- Create About action
+        help_menu.addAction(about_action)
+
         self.canvas.history_changed.connect(self._update_undo_redo_enabled)
         self._update_undo_redo_enabled()
         self.setWindowTitle("Simple PyPaint")
         self.setGeometry(100, 100, DEFAULT_WIDTH + 80, DEFAULT_HEIGHT + 120)
         self.update_color_preview(self.canvas.current_color)
         self.update_spinbox_value(self.canvas.current_pen_size)
+
+    def show_about_dialog(self):
+        """
+        Display the About dialog box.
+        """
+        about_text = (
+            "<b>Simple PyPaint v1.0.1</b><br><br>"
+            "A basic painting application built with Python and PySide6.<br><br>"
+            "If you encounter any problems or need help, please visit the GitHub repository:<br>"
+            "<a href='https://github.com/Josh-su/PyPaint'>https://github.com/Josh-su/PyPaint</a>"
+        )
+        QMessageBox.about(self, "About Simple PyPaint", about_text)
 
     def set_up_canvas(self):
         """
